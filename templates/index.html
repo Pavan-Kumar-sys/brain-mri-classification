@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brain MRI Classification, Active Learning & MLOps Monitor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-10px); }
+            40%, 80% { transform: translateX(10px); }
+        }
+        .animate-shake {
+            animation: shake 0.45s cubic-bezier(.36,.07,.19,.97) both;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
+
+    <!-- Ethical Disclaimer Banner -->
+    <div class="bg-amber-500/15 border-b border-amber-500/40 px-4 py-2.5 text-center text-xs sm:text-sm text-amber-200">
+        <strong>⚠️ EDUCATIONAL AI PROTOTYPE DISCLAIMER:</strong> Experimental deep-learning & MLOps demo. Predictions and active-learning updates <strong>must never be used for clinical diagnosis</strong>.
+    </div>
+
+    <!-- FUN ANTI-POISONING SECURITY POP-UP MODAL -->
+    <div id="snakeModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
+        <div id="snakeModalBox" class="bg-slate-900 border-2 border-rose-500 rounded-2xl max-w-md w-full mx-4 p-6 text-center shadow-2xl shadow-rose-600/30">
+            <div class="text-6xl mb-3">🐍🚨</div>
+            <h3 class="text-2xl font-extrabold text-rose-400 tracking-wide uppercase">
+                Don't Poison the Model, You Snake!
+            </h3>
+            <p class="text-sm text-slate-300 mt-3 leading-relaxed">
+                Caught red-handed! You tried feeding a fake label to corrupt the neural network weights. Our <strong>Anti-Poisoning Guardrail</strong> blocked your update and locked this scan in quarantine!
+            </p>
+            <div id="snakeModalDetails" class="mt-4 p-3 rounded-xl bg-rose-950/50 border border-rose-500/40 text-xs text-rose-200 font-mono text-left"></div>
+            <button onclick="closeSnakeModal()" class="mt-6 w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 px-4 rounded-xl transition shadow-lg shadow-rose-600/30">
+                I Promise I'll Behave 😭
+            </button>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-8 pb-6 border-b border-slate-800">
+            <div>
+                <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">Brain Tumor MRI Classifier & MLOps Monitor</h1>
+                <p class="text-slate-400 text-sm mt-1">ResNet-18 • Grad-CAM Explainability • Anti-Poisoning Active Learning</p>
+            </div>
+            <div class="mt-4 md:mt-0 flex items-center gap-3">
+                <span class="px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    Model Ready ({{ benchmarks.total_params }} params)
+                </span>
+                <span class="px-3 py-1 rounded-full text-xs font-medium bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                    🛡️ Anti-Poisoning Guardrail Active
+                </span>
+            </div>
+        </div>
+
+        <!-- Top Row: Standard Model Benchmark Cards -->
+        <div class="mb-8">
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">
+                Held-Out Test Set Benchmarks (ResNet-18 vs. {{ benchmarks.baseline_accuracy }}% Baseline CNN)
+            </h2>
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                    <p class="text-xs text-slate-400">Test Accuracy</p>
+                    <p class="text-2xl font-bold text-emerald-400 mt-1">{{ benchmarks.test_accuracy }}%</p>
+                    <p class="text-[11px] text-slate-500 mt-1">+11.31% vs Baseline</p>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                    <p class="text-xs text-slate-400">Macro F1-Score</p>
+                    <p class="text-2xl font-bold text-sky-400 mt-1">{{ benchmarks.macro_f1 }}%</p>
+                    <p class="text-[11px] text-slate-500 mt-1">+12.69% vs Baseline</p>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                    <p class="text-xs text-slate-400">Macro ROC-AUC</p>
+                    <p class="text-2xl font-bold text-indigo-400 mt-1">{{ benchmarks.macro_roc_auc }}%</p>
+                    <p class="text-[11px] text-slate-500 mt-1">One-vs-Rest (OvR)</p>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                    <p class="text-xs text-slate-400">Macro Precision</p>
+                    <p class="text-2xl font-bold text-purple-400 mt-1">{{ benchmarks.macro_precision }}%</p>
+                    <p class="text-[11px] text-slate-500 mt-1">Positive Pred. Value</p>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                    <p class="text-xs text-slate-400">Macro Recall</p>
+                    <p class="text-2xl font-bold text-teal-400 mt-1">{{ benchmarks.macro_recall }}%</p>
+                    <p class="text-[11px] text-slate-500 mt-1">Overall Sensitivity</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Interactive Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-10">
+            <!-- Left Column -->
+            <div class="lg:col-span-5 space-y-6">
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                    <h3 class="text-base font-semibold text-white mb-2">1. Upload Brain MRI Slice</h3>
+                    <p class="text-xs text-slate-400 mb-4">
+                        Upload any T1c MRI scan to run live inference, log telemetry, and test the anti-poisoning guardrail.
+                    </p>
+                    <label for="mriInput" class="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-xl cursor-pointer bg-slate-950/50 transition">
+                        <div class="flex flex-col items-center justify-center pt-4 pb-4 text-center px-4">
+                            <p class="text-sm text-slate-300 font-medium" id="fileNameDisplay">Click to select an MRI scan (.jpg / .png)</p>
+                            <p class="text-xs text-slate-500 mt-1">Automatically resized to 224x224 RGB tensor</p>
+                        </div>
+                        <input id="mriInput" type="file" accept="image/*" class="hidden" />
+                    </label>
+                    <button id="predictBtn" onclick="runInference()" class="w-full mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 px-4 rounded-xl transition">
+                        Run Model Prediction & Grad-CAM
+                    </button>
+                    <p id="errorMsg" class="text-xs text-rose-400 mt-2 hidden"></p>
+                </div>
+
+                <!-- Standard Per-Class Metrics Table -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                    <h3 class="text-base font-semibold text-white mb-1">Per-Class Test Set Performance</h3>
+                    <p class="text-xs text-slate-400 mb-4">Held-out benchmark across 1,468 deduplicated test images</p>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="text-slate-400 border-b border-slate-800 uppercase">
+                                <tr>
+                                    <th class="pb-2">Class</th>
+                                    <th class="pb-2 text-right">Precision</th>
+                                    <th class="pb-2 text-right">Recall</th>
+                                    <th class="pb-2 text-right">F1-Score</th>
+                                    <th class="pb-2 text-right">Support</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800/60 text-slate-200">
+                                {% for c in benchmarks.per_class %}
+                                <tr id="row-{{ c.name }}" class="transition">
+                                    <td class="py-2.5 font-medium capitalize">{{ c.name }}</td>
+                                    <td class="py-2.5 text-right">{{ "%.2f"|format(c.precision) }}%</td>
+                                    <td class="py-2.5 text-right">{{ "%.2f"|format(c.recall) }}%</td>
+                                    <td class="py-2.5 text-right font-semibold text-sky-400">{{ "%.2f"|format(c.f1) }}%</td>
+                                    <td class="py-2.5 text-right text-slate-400">{{ c.support }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column -->
+            <div class="lg:col-span-7">
+                <div id="placeholderCard" class="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-12 text-center h-full flex flex-col items-center justify-center">
+                    <p class="text-slate-400 text-sm">Upload an MRI scan on the left to inspect live Softmax probabilities, Grad-CAM heatmaps, and test the guarded Active Learning loop.</p>
+                </div>
+
+                <div id="resultsCard" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5 hidden">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                        <div>
+                            <span class="text-xs uppercase tracking-wider text-slate-400">Predicted Classification</span>
+                            <div class="flex items-center gap-3 mt-1">
+                                <span id="predClassBadge" class="text-2xl font-extrabold uppercase text-white tracking-wide">—</span>
+                                <span id="predConfBadge" class="px-2.5 py-0.5 rounded-md text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">0.0% Confidence</span>
+                            </div>
+                        </div>
+                        <div class="text-left sm:text-right">
+                            <span class="text-xs text-slate-400">Inference Latency</span>
+                            <p id="latencyText" class="text-sm font-mono text-slate-200">0.0 ms</p>
+                        </div>
+                    </div>
+
+                    <div id="lowConfAlert" class="bg-amber-500/10 border border-amber-500/40 rounded-xl p-3 text-xs text-amber-200 hidden">
+                        <strong>⚠️ Low-Confidence / Potential Drift (&lt;80%):</strong> Logged to MLOps telemetry as an uncertain prediction.
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 text-center">
+                            <p class="text-xs font-medium text-slate-400 mb-2">Preprocessed MRI Input (224x224)</p>
+                            <img id="origImg" src="" alt="Original MRI" class="mx-auto rounded-lg w-48 h-48 object-cover border border-slate-800" />
+                        </div>
+                        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 text-center">
+                            <p class="text-xs font-medium text-slate-400 mb-2">Grad-CAM Attention Map (Layer 4)</p>
+                            <img id="gradcamImg" src="" alt="Grad-CAM Overlay" class="mx-auto rounded-lg w-48 h-48 object-cover border border-slate-800" />
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2.5">Softmax Class Probability Distribution</h4>
+                        <div id="probBarsContainer" class="space-y-2"></div>
+                    </div>
+
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-4 text-xs">
+                        <div>
+                            <span class="text-slate-400">Predicted Class Test Reliability (<strong id="metricClassName" class="text-white capitalize">-</strong>):</span>
+                        </div>
+                        <div class="flex gap-4">
+                            <span>Precision: <strong id="metricPrec" class="text-purple-300">-</strong></span>
+                            <span>Recall: <strong id="metricRec" class="text-teal-300">-</strong></span>
+                            <span>F1-Score: <strong id="metricF1" class="text-sky-300">-</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- Guarded Active Learning Box -->
+                    <div class="bg-indigo-950/30 border border-indigo-500/30 rounded-xl p-4">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-indigo-300 mb-1">
+                            🧠 Guarded Active Learning (Experience Replay + Anti-Poisoning Gate)
+                        </h4>
+                        <p class="text-xs text-slate-300 mb-3">
+                            Submit a verified label to fine-tune ResNet-18. High-confidence contradictions (&ge;90%) trigger the Anti-Poisoning Snake Trap!
+                        </p>
+                        <div class="flex flex-col sm:flex-row gap-3 items-center">
+                            <select id="trueClassSelect" class="bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-lg px-3 py-2 w-full sm:w-auto">
+                                <option value="glioma">True Label: Glioma</option>
+                                <option value="meningioma">True Label: Meningioma</option>
+                                <option value="notumor">True Label: No Tumor</option>
+                                <option value="pituitary">True Label: Pituitary</option>
+                            </select>
+                            <button id="learnBtn" onclick="triggerActiveLearning()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition w-full sm:w-auto">
+                                Verify & Fine-Tune Model on This Scan
+                            </button>
+                        </div>
+                        <div id="learnResultMsg" class="mt-3 p-3 rounded-lg bg-slate-950/80 border border-slate-800 text-xs font-mono hidden"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Section: AI Monitoring & Telemetry Dashboard -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+            <div class="mb-6 pb-4 border-b border-slate-800">
+                <h2 class="text-lg font-bold text-white">📊 Live AI Monitoring & Security Telemetry (SQLite MLOps Log)</h2>
+                <p class="text-xs text-slate-400">Tracks inference latency, confidence drift alerts (&lt;80%), verified accuracy, and blocked poisoning attempts</p>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-6 gap-4 mb-6">
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5">
+                    <p class="text-xs text-slate-400">Scans Monitored</p>
+                    <p id="telTotal" class="text-xl font-bold text-white mt-1">0</p>
+                </div>
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5">
+                    <p class="text-xs text-slate-400">Mean Confidence</p>
+                    <p id="telConf" class="text-xl font-bold text-indigo-400 mt-1">0%</p>
+                </div>
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5">
+                    <p class="text-xs text-slate-400">Drift Alerts (&lt;80%)</p>
+                    <p id="telDrift" class="text-xl font-bold text-amber-400 mt-1">0</p>
+                </div>
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5">
+                    <p class="text-xs text-slate-400">Accepted Updates</p>
+                    <p id="telVerified" class="text-xl font-bold text-sky-400 mt-1">0</p>
+                </div>
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5">
+                    <p class="text-xs text-slate-400">Blocked Snakes 🐍</p>
+                    <p id="telQuarantined" class="text-xl font-bold text-rose-400 mt-1">0</p>
+                </div>
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5">
+                    <p class="text-xs text-slate-400">Verified Accuracy</p>
+                    <p id="telLiveAcc" class="text-xl font-bold text-emerald-400 mt-1">N/A</p>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead class="text-slate-400 border-b border-slate-800 uppercase">
+                        <tr>
+                            <th class="pb-2">Log ID</th>
+                            <th class="pb-2">Timestamp</th>
+                            <th class="pb-2">File</th>
+                            <th class="pb-2">Predicted</th>
+                            <th class="pb-2">Confidence</th>
+                            <th class="pb-2">Latency</th>
+                            <th class="pb-2">Feedback Label</th>
+                            <th class="pb-2">Security Gate Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="telemetryTableBody" class="divide-y divide-slate-800/60 text-slate-300"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const INITIAL_TELEMETRY = {{ telemetry | tojson }};
+        const fileInput = document.getElementById("mriInput");
+        const fileNameDisplay = document.getElementById("fileNameDisplay");
+
+        fileInput.addEventListener("change", () => {
+            if (fileInput.files.length > 0) {
+                fileNameDisplay.textContent = "Selected: " + fileInput.files[0].name;
+                fileNameDisplay.classList.add("text-indigo-300");
+            }
+        });
+
+        function showSnakeModal(reasonText) {
+            const modal = document.getElementById("snakeModal");
+            const modalBox = document.getElementById("snakeModalBox");
+            document.getElementById("snakeModalDetails").textContent = reasonText;
+            modal.classList.remove("hidden");
+            modalBox.classList.remove("animate-shake");
+            void modalBox.offsetWidth;
+            modalBox.classList.add("animate-shake");
+        }
+
+        function closeSnakeModal() {
+            document.getElementById("snakeModal").classList.add("hidden");
+        }
+
+        function refreshTelemetryUI(tel) {
+            if (!tel) return;
+            document.getElementById("telTotal").textContent = tel.total_scans || 0;
+            document.getElementById("telConf").textContent = (tel.avg_confidence || 0) + "%";
+            document.getElementById("telDrift").textContent = tel.drift_alerts || 0;
+            document.getElementById("telVerified").textContent = tel.verified_count || 0;
+            document.getElementById("telQuarantined").textContent = tel.quarantined_count || 0;
+            document.getElementById("telLiveAcc").textContent = tel.live_accuracy !== null && tel.live_accuracy !== undefined ? tel.live_accuracy + "%" : "N/A";
+
+            const tbody = document.getElementById("telemetryTableBody");
+            tbody.innerHTML = "";
+            (tel.recent_logs || []).forEach(log => {
+                const verLabel = log.verified_class
+                    ? `<span class="uppercase font-semibold text-slate-200">${log.verified_class}</span>`
+                    : `<span class="text-slate-500">—</span>`;
+
+                let secBadge = `<span class="text-slate-500">UNVERIFIED</span>`;
+                if (log.security_status && log.security_status.includes("QUARANTINED")) {
+                    secBadge = `<span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-semibold">🐍 ${log.security_status}</span>`;
+                } else if (log.security_status === "ACCEPTED") {
+                    secBadge = `<span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold">ACCEPTED</span>`;
+                }
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="py-2 font-mono text-slate-500">#${log.id}</td>
+                        <td class="py-2">${log.timestamp}</td>
+                        <td class="py-2 text-slate-200">${log.filename}</td>
+                        <td class="py-2 uppercase font-semibold">${log.predicted_class}</td>
+                        <td class="py-2 font-mono">${Number(log.confidence).toFixed(2)}%</td>
+                        <td class="py-2 font-mono">${Number(log.latency_ms).toFixed(1)} ms</td>
+                        <td class="py-2">${verLabel}</td>
+                        <td class="py-2">${secBadge}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        async function runInference() {
+            const errorMsg = document.getElementById("errorMsg");
+            const btn = document.getElementById("predictBtn");
+            const learnMsg = document.getElementById("learnResultMsg");
+            errorMsg.classList.add("hidden");
+            learnMsg.classList.add("hidden");
+
+            if (!fileInput.files.length) {
+                errorMsg.textContent = "Please choose an MRI image file first.";
+                errorMsg.classList.remove("hidden");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            btn.disabled = true;
+            btn.textContent = "Analyzing MRI & Logging Telemetry...";
+
+            try {
+                const res = await fetch("/predict", { method: "POST", body: formData });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || "Prediction failed.");
+
+                document.getElementById("placeholderCard").classList.add("hidden");
+                document.getElementById("resultsCard").classList.remove("hidden");
+
+                document.getElementById("predClassBadge").textContent = data.predicted_class;
+                document.getElementById("predConfBadge").textContent = `${data.confidence.toFixed(2)}% Confidence`;
+                document.getElementById("latencyText").textContent = `${data.inference_ms} ms (CPU)`;
+                document.getElementById("trueClassSelect").value = data.predicted_class;
+
+                const lowConfAlert = document.getElementById("lowConfAlert");
+                if (data.low_confidence_warning) lowConfAlert.classList.remove("hidden");
+                else lowConfAlert.classList.add("hidden");
+
+                document.getElementById("origImg").src = data.original_image;
+                document.getElementById("gradcamImg").src = data.gradcam_image;
+
+                const probContainer = document.getElementById("probBarsContainer");
+                probContainer.innerHTML = "";
+                Object.entries(data.probabilities).forEach(([cls, pct]) => {
+                    const isTop = cls === data.predicted_class;
+                    const barColor = isTop ? "bg-indigo-500" : "bg-slate-600";
+                    probContainer.innerHTML += `
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="capitalize ${isTop ? 'font-bold text-white' : 'text-slate-400'}">${cls}</span>
+                                <span class="font-mono ${isTop ? 'text-indigo-300 font-bold' : 'text-slate-400'}">${pct.toFixed(2)}%</span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-2">
+                                <div class="${barColor} h-2 rounded-full transition-all duration-500" style="width: ${Math.max(pct, 1)}%"></div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                ["glioma", "meningioma", "notumor", "pituitary"].forEach(c => {
+                    const row = document.getElementById(`row-${c}`);
+                    if (row) row.className = c === data.predicted_class ? "bg-indigo-500/15 font-semibold" : "";
+                });
+
+                document.getElementById("metricClassName").textContent = data.class_test_metrics.name;
+                document.getElementById("metricPrec").textContent = data.class_test_metrics.precision.toFixed(2) + "%";
+                document.getElementById("metricRec").textContent = data.class_test_metrics.recall.toFixed(2) + "%";
+                document.getElementById("metricF1").textContent = data.class_test_metrics.f1.toFixed(2) + "%";
+
+                refreshTelemetryUI(data.telemetry);
+            } catch (err) {
+                errorMsg.textContent = err.message;
+                errorMsg.classList.remove("hidden");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Run Model Prediction & Grad-CAM";
+            }
+        }
+
+        async function triggerActiveLearning() {
+            const learnBtn = document.getElementById("learnBtn");
+            const learnMsg = document.getElementById("learnResultMsg");
+            const trueClass = document.getElementById("trueClassSelect").value;
+
+            learnBtn.disabled = true;
+            learnBtn.textContent = "Running Anti-Poisoning & Anchor Gate...";
+
+            try {
+                const res = await fetch("/feedback", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ true_class: trueClass })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || "Active learning failed.");
+
+                const st = data.update_stats;
+                learnMsg.classList.remove("hidden", "text-emerald-300", "text-rose-400", "text-amber-300");
+
+                if (st.status === "QUARANTINED" || st.status === "ROLLED_BACK") {
+                    learnMsg.classList.add("text-rose-400");
+                    learnMsg.textContent = `🐍 [${st.status}] ${st.reason}`;
+                    showSnakeModal(st.reason);
+                } else {
+                    learnMsg.classList.add("text-emerald-300");
+                    learnMsg.textContent = `✓ [ACCEPTED] '${st.true_class.toUpperCase()}' probability shifted ${st.prob_before}% ➔ ${st.prob_after}% (Golden Anchor Acc: ${st.anchor_acc}%)`;
+                }
+
+                refreshTelemetryUI(data.telemetry);
+            } catch (err) {
+                learnMsg.classList.remove("hidden");
+                learnMsg.classList.add("text-rose-400");
+                learnMsg.textContent = "Error: " + err.message;
+            } finally {
+                learnBtn.disabled = false;
+                learnBtn.textContent = "Verify & Fine-Tune Model on This Scan";
+            }
+        }
+
+        // Populate initial telemetry on page load
+        refreshTelemetryUI(INITIAL_TELEMETRY);
+    </script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+# Ignore Virtual Environment
+venv/
+.venv/
+
+# Ignore Raw Dataset Images & Local MLOps Vaults
+data/Training/
+data/Testing/
+data/feedback_vault/
+data/quarantine_vault/
+data/monitoring_telemetry.db
+demo_samples/
+
+# Ignore extra/backup weights, but KEEP models/resnet18_best.pth for Render!
+models/baseline_best.pth
+models/resnet18_golden_backup.pth
+
+# Ignore Python Cache
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
